@@ -68,7 +68,13 @@ $builder->addDefinitions([
             ]
         );
     },
-    Messages::class => static fn(): Messages => new Messages(),
+    Messages::class => static function (): Messages {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            session_start();
+        }
+
+        return new Messages();
+    },
     Client::class => static fn(): Client => new Client(['timeout' => 15]),
     Twig::class => static function (ContainerInterface $container): Twig {
         $settings = $container->get('settings');
