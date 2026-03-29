@@ -38,6 +38,7 @@ class ReservationController
             'page_title' => 'Reservations',
             'auth' => $user,
             'reservations' => $this->reservations->allCritical(),
+            'last_pulled_at' => $this->reservations->latestPulledAt(),
             'nav_section' => 'reservations',
         ]);
     }

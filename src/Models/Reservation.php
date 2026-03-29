@@ -12,6 +12,19 @@ class Reservation
     {
     }
 
+    public function latestPulledAt(): ?string
+    {
+        $statement = $this->pdo->query(
+            'SELECT MAX(updated_at) AS latest_pulled_at
+             FROM tbl_reservation_cloudbed'
+        );
+
+        $row = $statement->fetch();
+        $value = $row['latest_pulled_at'] ?? null;
+
+        return $value !== null && $value !== '' ? (string) $value : null;
+    }
+
     public function customerCandidates(string $search = ''): array
     {
         $sql = 'SELECT

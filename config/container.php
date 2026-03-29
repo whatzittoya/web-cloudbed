@@ -35,7 +35,7 @@ $builder->addDefinitions([
             'database' => $_ENV['DB_DATABASE'] ?? 'db_arna',
             'username' => $_ENV['DB_USERNAME'] ?? 'root',
             'password' => $_ENV['DB_PASSWORD'] ?? '',
-            'charset' => 'utf8mb4',
+            'charset' => $_ENV['DB_CHARSET'] ?? 'utf8',
         ],
         'cloudbeds' => [
             'base_url' => rtrim($_ENV['CLOUDBEDS_BASE_URL'] ?? 'https://api.cloudbeds.com/api/v1.3', '/'),
