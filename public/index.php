@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Middleware\SessionMiddleware;
 use DI\Bridge\Slim\Bridge;
 use Dotenv\Dotenv;
+use Slim\Views\Twig;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
@@ -19,8 +20,22 @@ $settings = $container->get('settings');
 
 $app = Bridge::create($container);
 
-if ($settings['app']['base_path'] !== '') {
-    $app->setBasePath($settings['app']['base_path']);
+$basePath = $settings['app']['base_path'];
+
+if ($basePath === '') {
+    $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
+    $scriptDir = rtrim(str_replace('/index.php', '', $scriptName), '/');
+
+    if ($scriptDir !== '' && str_ends_with($scriptDir, '/public')) {
+        $basePath = substr($scriptDir, 0, -7);
+    } else {
+        $basePath = $scriptDir;
+    }
+}
+
+if ($basePath !== '') {
+    $app->setBasePath($basePath);
+    $container->get(Twig::class)->getEnvironment()->addGlobal('base_path', $basePath);
 }
 
 $app->addBodyParsingMiddleware();
