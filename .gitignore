@@ -2,4 +2,5 @@
 /.env
 /var/cache/*
 /var/logs/*
+/skills/*
 
