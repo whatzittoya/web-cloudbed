@@ -1,7 +1,0 @@
-interface:
-  display_name: "Design Bookings Index Twig"
-  short_description: "Recreate bookings index layout and motion"
-  default_prompt: "Use $design-bookings-index-twig to redesign templates/bookings/index.html.twig with this app's layout, transitions, and AJAX interaction pattern."
-
-policy:
-  allow_implicit_invocation: true

@@ -1,7 +1,0 @@
-interface:
-  display_name: "Replicate Slim MVC Booking App"
-  short_description: "Clone the Slim MVC booking app"
-  default_prompt: "Use $replicate-slim-mvc-booking-app to recreate this app's Slim 4 MVC structure and UI patterns in another PHP project."
-
-policy:
-  allow_implicit_invocation: true
