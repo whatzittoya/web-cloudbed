@@ -1,8 +1,9 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteBase /web-cloudbed/
+    DirectoryIndex index.php
 
-    RewriteCond %{REQUEST_URI} !^/web-cloudbed/public/
-    RewriteRule ^$ public/index.php [QSA,L]
-    RewriteRule ^(.*)$ public/$1 [QSA,L]
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ index.php [QSA,L]
 </IfModule>
