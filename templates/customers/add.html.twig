@@ -1,0 +1,271 @@
+{% extends 'layouts/base.html.twig' %}
+
+{% block content %}
+    <div class="space-y-6">
+        <div id="customer-alert" class="hidden rounded-2xl px-4 py-3 text-sm"></div>
+
+        <section class="rounded-[2rem] border border-slate-200 bg-white p-6 sm:p-8">
+            <form id="customer-search-form" method="get" action="{{ base_path }}/customers/add" class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                <div>
+                    <label for="guest_name" class="mb-2 block text-sm font-medium text-slate-700">Search customer</label>
+                    <input
+                        id="guest_name"
+                        name="guest_name"
+                        type="text"
+                        value="{{ filters.guest_name }}"
+                        class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white"
+                        placeholder="Search guest name"
+                    >
+                </div>
+                <div class="flex gap-3">
+                    <button id="customer-search-button" type="submit" class="inline-flex items-center justify-center gap-3 rounded-xl bg-sky-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-sky-300">
+                        <span id="customer-search-spinner" class="hidden h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin"></span>
+                        <span id="customer-search-label">Search</span>
+                    </button>
+                    <a id="customer-search-reset" href="{{ base_path }}/customers/add" class="inline-flex items-center justify-center rounded-xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-600 transition hover:border-sky-200 hover:text-sky-600">
+                        Reset
+                    </a>
+                </div>
+            </form>
+        </section>
+
+        <section class="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white">
+            <div id="customer-results-loading" class="absolute inset-0 hidden items-center justify-center bg-white/80 backdrop-blur-sm">
+                <div class="flex items-center gap-3 rounded-full border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-600 shadow-sm">
+                    <span class="h-4 w-4 rounded-full border-2 border-slate-200 border-t-sky-600 animate-spin"></span>
+                    Loading guests...
+                </div>
+            </div>
+
+            <div id="customer-results-table" class="{% if not customers %}hidden{% endif %} overflow-x-auto">
+                    <table class="min-w-full divide-y divide-slate-200">
+                        <thead class="bg-slate-50">
+                            <tr class="text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                                <th class="px-6 py-4">Guest</th>
+                                <th class="px-6 py-4">Reservation</th>
+                                <th class="px-6 py-4">Stay</th>
+                                <th class="px-6 py-4">Room Type</th>
+                                <th class="px-6 py-4">Room Name</th>
+                                <th class="px-6 py-4">Status</th>
+                                <th class="px-6 py-4">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="customer-results-body" class="divide-y divide-slate-100 text-sm text-slate-700">
+                            {% for customer in customers %}
+                                <tr>
+                                    <td class="px-6 py-4 font-semibold text-slate-900">{{ customer.guest_name }}</td>
+                                    <td class="px-6 py-4">{{ customer.reservation_id }}</td>
+                                    <td class="px-6 py-4">{{ customer.start_date }} to {{ customer.end_date }}</td>
+                                    <td class="px-6 py-4">{{ customer.room_type_name ?: '-' }}</td>
+                                    <td class="px-6 py-4">{{ customer.room_name ?: '-' }}</td>
+                                    <td class="px-6 py-4">
+                                        <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] text-emerald-700">
+                                            {{ customer.status|replace({'_': ' '}) }}
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <button
+                                            type="button"
+                                            class="customer-add-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition {{ customer.customer_added ? 'cursor-not-allowed bg-emerald-100 text-emerald-700' : 'bg-sky-600 text-white hover:bg-sky-500' }}"
+                                            data-url="{{ base_path }}/reservations/{{ customer.reservation_id }}/customers"
+                                            {% if customer.customer_added %}disabled{% endif %}
+                                        >
+                                            <span class="customer-add-spinner hidden h-3.5 w-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin"></span>
+                                            <span class="customer-add-label">{{ customer.customer_added ? 'Added' : 'Add customer' }}</span>
+                                        </button>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+            </div>
+
+            <div id="customer-results-empty" class="{% if customers %}hidden{% endif %} px-6 py-12 text-center">
+                <p class="text-lg font-semibold text-slate-900">No guest found.</p>
+                <p class="mt-2 text-sm text-slate-500">Search by guest name to load reservations.</p>
+            </div>
+        </section>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        $(function () {
+            const $form = $('#customer-search-form');
+            const $input = $('#guest_name');
+            const $alert = $('#customer-alert');
+            const $searchButton = $('#customer-search-button');
+            const $searchSpinner = $('#customer-search-spinner');
+            const $searchLabel = $('#customer-search-label');
+            const $resultsLoading = $('#customer-results-loading');
+            const $resultsTable = $('#customer-results-table');
+            const $resultsBody = $('#customer-results-body');
+            const $resultsEmpty = $('#customer-results-empty');
+            const searchDefaultLabel = $searchLabel.text();
+
+            function escapeHtml(value) {
+                return String(value ?? '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            function statusHtml(status) {
+                return `
+                    <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] text-emerald-700">
+                        ${escapeHtml(String(status || '-').replace(/_/g, ' '))}
+                    </span>
+                `;
+            }
+
+            function actionButtonHtml(customer) {
+                const disabled = Number(customer.customer_added || 0) === 1;
+                const classes = disabled
+                    ? 'cursor-not-allowed bg-emerald-100 text-emerald-700'
+                    : 'bg-sky-600 text-white hover:bg-sky-500';
+                const label = disabled ? 'Added' : 'Add customer';
+
+                return `
+                    <button
+                        type="button"
+                        class="customer-add-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition ${classes}"
+                        data-url="{{ base_path }}/reservations/${encodeURIComponent(customer.reservation_id)}/customers"
+                        ${disabled ? 'disabled' : ''}
+                    >
+                        <span class="customer-add-spinner hidden h-3.5 w-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin"></span>
+                        <span class="customer-add-label">${label}</span>
+                    </button>
+                `;
+            }
+
+            function renderRows(customers) {
+                if (!customers.length) {
+                    $resultsBody.html('');
+                    $resultsTable.addClass('hidden');
+                    $resultsEmpty.removeClass('hidden');
+                    return;
+                }
+
+                const rows = customers.map(function (customer) {
+                    return `
+                        <tr>
+                            <td class="px-6 py-4 font-semibold text-slate-900">${escapeHtml(customer.guest_name)}</td>
+                            <td class="px-6 py-4">${escapeHtml(customer.reservation_id)}</td>
+                            <td class="px-6 py-4">${escapeHtml(customer.start_date)} to ${escapeHtml(customer.end_date)}</td>
+                            <td class="px-6 py-4">${escapeHtml(customer.room_type_name || '-')}</td>
+                            <td class="px-6 py-4">${escapeHtml(customer.room_name || '-')}</td>
+                            <td class="px-6 py-4">${statusHtml(customer.status)}</td>
+                            <td class="px-6 py-4">${actionButtonHtml(customer)}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+                $resultsBody.html(rows);
+                $resultsTable.removeClass('hidden');
+                $resultsEmpty.addClass('hidden');
+            }
+
+            function setSearchLoading(isLoading) {
+                $searchButton.prop('disabled', isLoading);
+                $searchSpinner.toggleClass('hidden', !isLoading);
+                $searchLabel.text(isLoading ? 'Searching...' : searchDefaultLabel);
+                $resultsLoading.toggleClass('hidden', !isLoading);
+                $resultsLoading.toggleClass('flex', isLoading);
+            }
+
+            function clearAlert() {
+                $alert
+                    .addClass('hidden')
+                    .removeClass('border border-emerald-200 border-rose-200 bg-emerald-50 bg-rose-50 text-emerald-700 text-rose-700')
+                    .text('');
+            }
+
+            function showAlert(message, isError) {
+                $alert
+                    .removeClass('hidden border border-emerald-200 border-rose-200 bg-emerald-50 bg-rose-50 text-emerald-700 text-rose-700')
+                    .addClass(isError ? 'border border-rose-200 bg-rose-50 text-rose-700' : 'border border-emerald-200 bg-emerald-50 text-emerald-700')
+                    .text(message);
+            }
+
+            $form.on('submit', function (event) {
+                event.preventDefault();
+
+                clearAlert();
+                setSearchLoading(true);
+
+                $.ajax({
+                    url: $form.attr('action'),
+                    method: 'GET',
+                    data: {
+                        guest_name: $input.val()
+                    },
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                }).done(function (response) {
+                    const customers = response.data && Array.isArray(response.data.customers)
+                        ? response.data.customers
+                        : [];
+
+                    renderRows(customers);
+                }).fail(function (xhr) {
+                    const response = xhr.responseJSON || {};
+                    showAlert(response.message || 'Failed to search customers.', true);
+                }).always(function () {
+                    setSearchLoading(false);
+                });
+            });
+
+            $("#customer-search-reset").on('click', function (event) {
+                event.preventDefault();
+                $input.val('');
+                clearAlert();
+                $resultsBody.html('');
+                $resultsTable.addClass('hidden');
+                $resultsEmpty.removeClass('hidden');
+            });
+
+            $resultsBody.on('click', '.customer-add-button', function () {
+                const $button = $(this);
+                const $spinner = $button.find('.customer-add-spinner');
+                const $label = $button.find('.customer-add-label');
+
+                if ($button.prop('disabled')) {
+                    return;
+                }
+
+                $button.prop('disabled', true).removeClass('bg-sky-600 hover:bg-sky-500').addClass('bg-slate-400 text-white');
+                $spinner.removeClass('hidden');
+                $label.text('Saving...');
+                clearAlert();
+                $resultsLoading.removeClass('hidden').addClass('flex');
+
+                $.ajax({
+                    url: $button.data('url'),
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                }).done(function (response) {
+                    $spinner.addClass('hidden');
+                    $label.text('Added');
+                    $button.removeClass('bg-slate-400 text-white').addClass('bg-emerald-100 text-emerald-700 cursor-not-allowed');
+                    showAlert(response.message || 'Customer saved.', false);
+                }).fail(function (xhr) {
+                    const response = xhr.responseJSON || {};
+
+                    $button.prop('disabled', false).removeClass('bg-slate-400').addClass('bg-sky-600 text-white hover:bg-sky-500');
+                    $spinner.addClass('hidden');
+                    $label.text('Add customer');
+                    showAlert(response.message || 'Failed to save customer.', true);
+                }).always(function () {
+                    $resultsLoading.removeClass('flex').addClass('hidden');
+                });
+            });
+        });
+    </script>
+{% endblock %}

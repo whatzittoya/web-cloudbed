@@ -1,0 +1,41 @@
+{% extends 'layouts/base.html.twig' %}
+
+{% block content %}
+    <div class="flex min-h-[calc(100vh-3rem)] items-center justify-center">
+        <div class="w-full max-w-md rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
+            <h2 class="text-2xl font-semibold text-slate-900">Sign in</h2>
+
+            <form method="post" action="{{ base_path }}/login" class="mt-6 space-y-5">
+                <div>
+                    <label for="name" class="mb-2 block text-sm font-medium text-slate-700">Name</label>
+                    <input
+                        id="name"
+                        name="name"
+                        type="text"
+                        value="{{ old.name|default('') }}"
+                        autocomplete="username"
+                        class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white"
+                        required
+                    >
+                </div>
+
+                <div>
+                    <label for="pin" class="mb-2 block text-sm font-medium text-slate-700">PIN</label>
+                    <input
+                        id="pin"
+                        name="pin"
+                        type="password"
+                        inputmode="numeric"
+                        autocomplete="current-password"
+                        class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white"
+                        required
+                    >
+                </div>
+
+                <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-500">
+                    Sign in
+                </button>
+            </form>
+        </div>
+    </div>
+{% endblock %}

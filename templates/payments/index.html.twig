@@ -1,0 +1,391 @@
+{% extends 'layouts/base.html.twig' %}
+
+{% block content %}
+    <div class="space-y-6">
+        <section class="rounded-[2rem] border border-slate-200 bg-white p-6 sm:p-8">
+            <div>
+                <h2 class="text-3xl font-semibold text-slate-900">Payments</h2>
+            </div>
+            <div class="mt-6 flex items-end gap-3">
+                <div class="flex-1">
+                <label for="payment-search" class="mb-2 block text-sm font-medium text-slate-700">Search name</label>
+                <input
+                    id="payment-search"
+                    type="text"
+                    class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white"
+                    placeholder="Type customer name"
+                >
+                </div>
+                <button
+                    id="payments-refresh-button"
+                    type="button"
+                    class="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-emerald-300"
+                    aria-label="Refresh payments"
+                    title="Refresh payments"
+                >
+                    <span id="payments-refresh-spinner" class="hidden h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin"></span>
+                    <i id="payments-refresh-icon" class="bi bi-arrow-clockwise text-lg" aria-hidden="true"></i>
+                </button>
+            </div>
+        </section>
+
+        <div id="payments-alert" class="hidden rounded-2xl px-4 py-3 text-sm"></div>
+
+        <section class="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white">
+            <div id="payments-loading" class="absolute inset-0 hidden items-center justify-center bg-white/80 backdrop-blur-sm">
+                <div class="flex items-center gap-3 rounded-full border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-600 shadow-sm">
+                    <span class="h-4 w-4 rounded-full border-2 border-slate-200 border-t-sky-600 animate-spin"></span>
+                    Loading payments...
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-slate-200">
+                    <thead class="bg-slate-50">
+                        <tr class="text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                            <th class="px-6 py-4">Time</th>
+                            <th class="px-6 py-4">Customer</th>
+                            <th class="px-6 py-4">Subtotal</th>
+                            <th class="px-6 py-4">Service Charge</th>
+                            <th class="px-6 py-4">Amount</th>
+                            <th class="px-6 py-4">Closed</th>
+                            <th class="px-6 py-4">Detail</th>
+                        </tr>
+                    </thead>
+                    <tbody id="payments-table-body" class="divide-y divide-slate-100 text-sm text-slate-700"></tbody>
+                </table>
+            </div>
+
+            <div id="payments-empty" class="hidden px-6 py-12 text-center">
+                <p class="text-lg font-semibold text-slate-900">No payment rows found.</p>
+                <p class="mt-2 text-sm text-slate-500">Try another customer name or refresh the table.</p>
+            </div>
+        </section>
+
+        <section class="rounded-[2rem] border border-slate-200 bg-white px-6 py-4">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p id="payments-summary" class="text-sm text-slate-500"></p>
+                <div class="flex items-center gap-3">
+                    <button
+                        id="payments-prev-page"
+                        type="button"
+                        class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-sky-200 hover:text-sky-600 disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-300"
+                    >
+                        Previous
+                    </button>
+                    <span id="payments-page-indicator" class="text-sm font-medium text-slate-600"></span>
+                    <button
+                        id="payments-next-page"
+                        type="button"
+                        class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-sky-200 hover:text-sky-600 disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-300"
+                    >
+                        Next
+                    </button>
+                </div>
+            </div>
+        </section>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        $(function () {
+            const pageSize = 20;
+            let payments = {{ payments|json_encode|raw }};
+            let filteredPayments = payments.slice();
+            let currentPage = 1;
+
+            const $search = $('#payment-search');
+            const $refreshButton = $('#payments-refresh-button');
+            const $refreshSpinner = $('#payments-refresh-spinner');
+            const $refreshIcon = $('#payments-refresh-icon');
+            const $alert = $('#payments-alert');
+            const $loading = $('#payments-loading');
+            const $tableBody = $('#payments-table-body');
+            const $empty = $('#payments-empty');
+            const $summary = $('#payments-summary');
+            const $pageIndicator = $('#payments-page-indicator');
+            const $prevButton = $('#payments-prev-page');
+            const $nextButton = $('#payments-next-page');
+            function escapeHtml(value) {
+                return String(value ?? '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            function formatCurrency(value) {
+                return 'Rp ' + Number(value || 0).toLocaleString('id-ID');
+            }
+
+            function formatTime(value) {
+                if (!value) {
+                    return '-';
+                }
+
+                const parts = String(value).split(' ');
+
+                return parts.length > 1 ? parts[1] : String(value);
+            }
+
+            function showAlert(message, isError) {
+                $alert
+                    .removeClass('hidden border border-emerald-200 border-rose-200 bg-emerald-50 bg-rose-50 text-emerald-700 text-rose-700')
+                    .addClass(isError ? 'border border-rose-200 bg-rose-50 text-rose-700' : 'border border-emerald-200 bg-emerald-50 text-emerald-700')
+                    .text(message);
+            }
+
+            function clearAlert() {
+                $alert
+                    .addClass('hidden')
+                    .removeClass('border border-emerald-200 border-rose-200 bg-emerald-50 bg-rose-50 text-emerald-700 text-rose-700')
+                    .text('');
+            }
+
+            function setRefreshLoading(isLoading) {
+                $refreshButton.prop('disabled', isLoading);
+                $refreshSpinner.toggleClass('hidden', !isLoading);
+                $refreshIcon.toggleClass('hidden', isLoading);
+                $loading.toggleClass('hidden', !isLoading);
+                $loading.toggleClass('flex', isLoading);
+            }
+
+            function totalPages() {
+                return Math.max(1, Math.ceil(filteredPayments.length / pageSize));
+            }
+
+            function detailRowHtml(payment) {
+                const canSend = Boolean(payment.reservation_id) && Boolean(payment.property_id);
+
+                return `
+                    <tr id="payment-detail-${escapeHtml(payment.id)}" class="payment-detail-row hidden bg-slate-50/80">
+                        <td colspan="7" class="px-6 py-5">
+                            <div class="mb-5 flex justify-end">
+                                <button
+                                    type="button"
+                                    class="payment-send-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold text-white transition ${canSend ? 'bg-sky-600 hover:bg-sky-500 disabled:bg-sky-300' : 'bg-slate-300'} disabled:cursor-not-allowed"
+                                    data-id="${escapeHtml(payment.id)}"
+                                    ${canSend ? '' : 'disabled'}
+                                >
+                                    <span class="payment-send-spinner hidden h-3.5 w-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin"></span>
+                                    <span class="payment-send-label">${canSend ? 'Send to Cloudbeds' : 'Missing stay data'}</span>
+                                </button>
+                            </div>
+                            <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                                <div>
+                                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Date Time</p>
+                                    <p class="mt-2 text-sm font-medium text-slate-900">${escapeHtml(payment.payment_date || '-')}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Room Name</p>
+                                    <p class="mt-2 text-sm font-medium text-slate-900">${escapeHtml(payment.room_name || '-')}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Room Type</p>
+                                    <p class="mt-2 text-sm font-medium text-slate-900">${escapeHtml(payment.room_type || '-')}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Reservation ID</p>
+                                    <p class="mt-2 text-sm font-medium text-slate-900">${escapeHtml(payment.reservation_id || '-')}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Property ID</p>
+                                    <p class="mt-2 text-sm font-medium text-slate-900">${escapeHtml(payment.property_id || '-')}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Customer ID</p>
+                                    <p class="mt-2 text-sm font-medium text-slate-900">${escapeHtml(payment.customer_id || '-')}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Invoice ID</p>
+                                    <p class="mt-2 text-sm font-medium text-slate-900">${escapeHtml(payment.invoice_id || '-')}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Discount</p>
+                                    <p class="mt-2 text-sm font-medium text-slate-900">${formatCurrency(payment.discountamount)}</p>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }
+
+            function paymentRowHtml(payment) {
+                const closed = Number(payment.closed || 0) === 1;
+
+                return `
+                    <tr class="bg-white">
+                        <td class="px-6 py-4 font-semibold text-slate-900">${escapeHtml(formatTime(payment.payment_date))}</td>
+                        <td class="px-6 py-4">
+                            <div class="font-medium text-slate-900">${escapeHtml(payment.customer_name || '-')}</div>
+                            <div class="text-xs text-slate-500">${escapeHtml(payment.check_sales_customer_name || '-')}</div>
+                        </td>
+                        <td class="px-6 py-4">${formatCurrency(payment.subtotal)}</td>
+                        <td class="px-6 py-4">${formatCurrency(payment.servicechargeamount)}</td>
+                        <td class="px-6 py-4 font-semibold text-slate-900">${formatCurrency(payment.amount)}</td>
+                        <td class="px-6 py-4">
+                            <span class="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] ${closed ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}">
+                                ${closed ? 'Closed' : 'Open'}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4">
+                            <button
+                                type="button"
+                                class="payment-detail-toggle inline-flex items-center justify-center rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-sky-200 hover:text-sky-600"
+                                data-target="payment-detail-${escapeHtml(payment.id)}"
+                            >
+                                Detail
+                            </button>
+                        </td>
+                    </tr>
+                    ${detailRowHtml(payment)}
+                `;
+            }
+
+            function updatePaginationUi() {
+                const pages = totalPages();
+                const visibleCount = filteredPayments.length;
+                const start = visibleCount === 0 ? 0 : ((currentPage - 1) * pageSize) + 1;
+                const end = Math.min(currentPage * pageSize, visibleCount);
+
+                $summary.text(`Showing ${start}-${end} of ${visibleCount} payment row(s)`);
+                $pageIndicator.text(`Page ${currentPage} of ${pages}`);
+                $prevButton.prop('disabled', currentPage <= 1);
+                $nextButton.prop('disabled', currentPage >= pages);
+            }
+
+            function renderTable() {
+                const startIndex = (currentPage - 1) * pageSize;
+                const pageItems = filteredPayments.slice(startIndex, startIndex + pageSize);
+
+                if (!pageItems.length) {
+                    $tableBody.html('');
+                    $empty.removeClass('hidden');
+                } else {
+                    $tableBody.html(pageItems.map(paymentRowHtml).join(''));
+                    $empty.addClass('hidden');
+                }
+
+                updatePaginationUi();
+            }
+
+            function applyFilter() {
+                const keyword = $search.val().trim().toLowerCase();
+
+                filteredPayments = payments.filter(function (payment) {
+                    const customerName = String(payment.customer_name || '').toLowerCase();
+                    const checkSalesName = String(payment.check_sales_customer_name || '').toLowerCase();
+
+                    return keyword === '' || customerName.includes(keyword) || checkSalesName.includes(keyword);
+                });
+
+                currentPage = 1;
+                renderTable();
+            }
+
+            function refreshPayments(options = {}) {
+                const showSuccess = options.showSuccess === true;
+                const successMessage = options.successMessage || 'Payments refreshed.';
+
+                if (!showSuccess) {
+                    clearAlert();
+                }
+
+                setRefreshLoading(true);
+
+                $.ajax({
+                    url: '{{ base_path }}/payments',
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                }).done(function (response) {
+                    const rows = response.data && Array.isArray(response.data.payments)
+                        ? response.data.payments
+                        : [];
+
+                    payments = rows;
+                    applyFilter();
+
+                    if (showSuccess) {
+                        showAlert(successMessage, false);
+                    }
+                }).fail(function (xhr) {
+                    const response = xhr.responseJSON || {};
+                    showAlert(response.message || 'Failed to refresh payments.', true);
+                }).always(function () {
+                    setRefreshLoading(false);
+                });
+            }
+
+            $search.on('input', function () {
+                applyFilter();
+            });
+
+            $prevButton.on('click', function () {
+                if (currentPage > 1) {
+                    currentPage -= 1;
+                    renderTable();
+                }
+            });
+
+            $nextButton.on('click', function () {
+                if (currentPage < totalPages()) {
+                    currentPage += 1;
+                    renderTable();
+                }
+            });
+
+            $refreshButton.on('click', function () {
+                refreshPayments();
+            });
+
+            $tableBody.on('click', '.payment-detail-toggle', function () {
+                const targetId = $(this).data('target');
+                $('#' + targetId).toggleClass('hidden');
+            });
+
+            $tableBody.on('click', '.payment-send-button', function () {
+                const $button = $(this);
+                const $spinner = $button.find('.payment-send-spinner');
+                const $label = $button.find('.payment-send-label');
+                const paymentId = $button.data('id');
+
+                if ($button.prop('disabled')) {
+                    return;
+                }
+
+                clearAlert();
+                $button.prop('disabled', true);
+                $spinner.removeClass('hidden');
+                $label.text('Sending...');
+
+                $.ajax({
+                    url: `{{ base_path }}/payments/${encodeURIComponent(paymentId)}/send`,
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                }).done(function (response) {
+                    refreshPayments({
+                        showSuccess: true,
+                        successMessage: response.message || 'Payment sent to Cloudbeds.'
+                    });
+                }).fail(function (xhr) {
+                    const response = xhr.responseJSON || {};
+                    showAlert(response.message || 'Failed to send payment to Cloudbeds.', true);
+                }).always(function () {
+                    $button.prop('disabled', false);
+                    $spinner.addClass('hidden');
+                    $label.text('Send to Cloudbeds');
+                });
+            });
+
+            applyFilter();
+        });
+    </script>
+{% endblock %}

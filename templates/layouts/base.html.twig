@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page_title|default(app_name) }} | {{ app_name }}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+</head>
+<body class="min-h-screen bg-slate-100 text-slate-900">
+    {% if show_nav %}
+        <header class="border-b border-slate-200 bg-white/90 backdrop-blur">
+            <div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.3em] text-sky-600">{{ app_header_label }}</p>
+                    <h1 class="text-lg font-semibold text-slate-900">{{ app_header_title }}</h1>
+                </div>
+                <div class="flex items-center gap-3">
+                    <a href="{{ base_path }}/" class="rounded-xl border px-4 py-2 text-sm font-medium transition {{ nav_section|default('') == 'dashboard' ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-200 text-slate-600 hover:border-sky-200 hover:text-sky-600' }}">Dashboard</a>
+                    <a href="{{ base_path }}/customers/add" class="rounded-xl border px-4 py-2 text-sm font-medium transition {{ nav_section|default('') == 'customers' ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-200 text-slate-600 hover:border-sky-200 hover:text-sky-600' }}">Add Customer</a>
+                    <a href="{{ base_path }}/payments" class="rounded-xl border px-4 py-2 text-sm font-medium transition {{ nav_section|default('') == 'payments' ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-200 text-slate-600 hover:border-sky-200 hover:text-sky-600' }}">Payments</a>
+                    <a href="{{ base_path }}/reservations" class="rounded-xl border px-4 py-2 text-sm font-medium transition {{ nav_section|default('') == 'reservations' ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-200 text-slate-600 hover:border-sky-200 hover:text-sky-600' }}">Reservations</a>
+                    {% if auth %}
+                        <div class="hidden rounded-xl bg-slate-100 px-4 py-2 text-sm text-slate-600 sm:block">
+                            {{ auth.name }}
+                            {% if auth.jobTitle %}
+                                <span class="text-slate-400">· {{ auth.jobTitle }}</span>
+                            {% endif %}
+                        </div>
+                        <form method="post" action="{{ base_path }}/logout">
+                            <button type="submit" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700">Logout</button>
+                        </form>
+                    {% endif %}
+                </div>
+            </div>
+        </header>
+    {% endif %}
+
+    <main class="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+        {% for message in flash.getMessage('success') %}
+            <div class="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                {{ message }}
+            </div>
+        {% endfor %}
+
+        {% for message in flash.getMessage('error') %}
+            <div class="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                {{ message }}
+            </div>
+        {% endfor %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

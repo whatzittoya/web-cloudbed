@@ -1,0 +1,29 @@
+{
+    "name": "quinos/web-cloudbed",
+    "description": "Slim MVC employee login app",
+    "require": {
+        "php": "^8.3",
+        "slim/slim": "^4.15",
+        "slim/psr7": "^1.8",
+        "php-di/slim-bridge": "^3.4",
+        "slim/twig-view": "^3.4",
+        "slim/flash": "^0.4.0",
+        "guzzlehttp/guzzle": "^7.10",
+        "vlucas/phpdotenv": "^5.6"
+    },
+    "authors": [
+        {
+            "name": "Codex",
+            "email": "codex@example.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    },
+    "scripts": {
+        "serve": "php -S 127.0.0.1:8080 -t public",
+        "check": "find config public src -name '*.php' -print0 | xargs -0 -n1 php -l"
+    }
+}
