@@ -1,5 +1,18 @@
 @echo off
 setlocal
-cd /d "%~dp0"
-powershell -ExecutionPolicy Bypass -File "%~dp0create_pull_reservations_task.ps1"
+
+set "TASK_NAME=Cloudbed Pull Reservations"
+set "PHP_EXE=%PHP_PATH%"
+if "%PHP_EXE%"=="" set "PHP_EXE=php.exe"
+
+set "SCRIPT_PATH=%~dp0pull_reservations.php"
+
+schtasks /Create ^
+  /F ^
+  /SC MINUTE ^
+  /MO 10 ^
+  /ST 00:00 ^
+  /TN "%TASK_NAME%" ^
+  /TR "\"%PHP_EXE%\" \"%SCRIPT_PATH%\""
+
 endlocal
