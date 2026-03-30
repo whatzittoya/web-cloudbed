@@ -24,6 +24,7 @@
     },
     "scripts": {
         "serve": "php -S 127.0.0.1:8080 -t public",
-        "check": "find config public src -name '*.php' -print0 | xargs -0 -n1 php -l"
+        "check": "find config public src -name '*.php' -print0 | xargs -0 -n1 php -l",
+        "pull-reservations": "php bin/pull_reservations.php"
     }
 }
