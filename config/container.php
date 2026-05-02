@@ -10,6 +10,7 @@ use App\Models\Customer;
 use App\Models\Employee;
 use App\Models\Payment;
 use App\Models\Reservation;
+use App\Services\SchedulerService;
 use DI\ContainerBuilder;
 use GuzzleHttp\Client;
 use Psr\Container\ContainerInterface;
@@ -91,6 +92,16 @@ $builder->addDefinitions([
 
         return $twig;
     },
+    SchedulerService::class => static function (ContainerInterface $container): SchedulerService {
+        $root = $container->get('settings')['paths']['root'];
+
+        return new SchedulerService($root . '/bin/pull_reservations.php', $root, 'quinos:pull_reservations');
+    },
+    'scheduler.payments' => static function (ContainerInterface $container): SchedulerService {
+        $root = $container->get('settings')['paths']['root'];
+
+        return new SchedulerService($root . '/bin/send_payments.php', $root, 'quinos:send_payments');
+    },
     AccessToken::class => DI\autowire(AccessToken::class),
     Customer::class => DI\autowire(Customer::class),
     Employee::class => DI\autowire(Employee::class),
@@ -101,8 +112,10 @@ $builder->addDefinitions([
     PaymentController::class => DI\autowire(PaymentController::class)
         ->constructorParameter('accessTokens', DI\get(AccessToken::class))
         ->constructorParameter('client', DI\get(Client::class))
+        ->constructorParameter('scheduler', DI\get('scheduler.payments'))
         ->constructorParameter('settings', DI\get('settings')),
     ReservationController::class => DI\autowire(ReservationController::class)
+        ->constructorParameter('scheduler', DI\get(SchedulerService::class))
         ->constructorParameter('settings', DI\get('settings')),
 ]);
 

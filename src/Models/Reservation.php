@@ -226,6 +226,11 @@ class Reservation
                 ]);
             }
 
+            $stalePlaceholders = implode(',', array_fill(0, count($reservationIds), '?'));
+            $this->pdo->prepare(
+                "DELETE FROM tbl_reservation_cloudbed WHERE reservation_id NOT IN ($stalePlaceholders)"
+            )->execute($reservationIds);
+
             $this->pdo->commit();
         } catch (\Throwable $exception) {
             $this->pdo->rollBack();

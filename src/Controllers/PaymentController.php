@@ -6,6 +6,7 @@ namespace App\Controllers;
 
 use App\Models\AccessToken;
 use App\Models\Payment;
+use App\Services\SchedulerService;
 use GuzzleHttp\Client;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -18,6 +19,7 @@ class PaymentController
         private readonly AccessToken $accessTokens,
         private readonly Client $client,
         private readonly Payment $payments,
+        private readonly SchedulerService $scheduler,
         private readonly array $settings
     ) {
     }
@@ -52,8 +54,71 @@ class PaymentController
             'page_title' => 'Payments',
             'auth' => $user,
             'payments' => $payments,
+            'scheduler' => $this->scheduler->getStatus(),
             'nav_section' => 'payments',
         ]);
+    }
+
+    public function getScheduler(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        if ($this->user() === null) {
+            return $this->json($response, ['success' => false, 'message' => 'Authentication required.'], 401);
+        }
+
+        return $this->json($response, [
+            'success' => true,
+            'data' => $this->scheduler->getStatus(),
+        ]);
+    }
+
+    public function updateScheduler(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        if ($this->user() === null) {
+            return $this->json($response, ['success' => false, 'message' => 'Authentication required.'], 401);
+        }
+
+        $body    = (array) ($request->getParsedBody() ?? []);
+        $enabled = filter_var($body['enabled'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $schedule = trim((string) ($body['schedule'] ?? ''));
+
+        try {
+            if (!$enabled) {
+                $this->scheduler->disable();
+
+                return $this->json($response, [
+                    'success' => true,
+                    'message' => 'Scheduler disabled.',
+                    'data' => $this->scheduler->getStatus(),
+                ]);
+            }
+
+            if ($schedule === '') {
+                return $this->json($response, [
+                    'success' => false,
+                    'message' => 'Schedule is required to enable the scheduler.',
+                ], 422);
+            }
+
+            if (SchedulerService::scheduleToExpression($schedule) === null) {
+                return $this->json($response, [
+                    'success' => false,
+                    'message' => 'Invalid schedule value.',
+                ], 422);
+            }
+
+            $this->scheduler->enable($schedule);
+
+            return $this->json($response, [
+                'success' => true,
+                'message' => 'Scheduler enabled.',
+                'data' => $this->scheduler->getStatus(),
+            ]);
+        } catch (\Throwable $e) {
+            return $this->json($response, [
+                'success' => false,
+                'message' => 'Failed to update scheduler: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     public function send(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface

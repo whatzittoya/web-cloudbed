@@ -34,10 +34,32 @@ class Payment
                 c.reservation_id,
                 c.postcode AS property_id
              FROM check_sales cs
-             LEFT JOIN tbl_customers c ON c.id = cs.customer_id
+             INNER JOIN tbl_customers c ON c.id = cs.customer_id AND c.reservation_id IS NOT NULL
              WHERE CAST(cs.trobex AS UNSIGNED) = 0
              ORDER BY cs.DATE DESC, cs.id DESC
              LIMIT 200'
+        );
+
+        return $statement->fetchAll();
+    }
+
+    public function allUnsentClosed(): array
+    {
+        $statement = $this->pdo->query(
+            'SELECT
+                cs.id,
+                cs.invoice_id,
+                cs.customer_id,
+                cs.amount,
+                c.name AS customer_name,
+                c.id AS customer_table_id,
+                c.reservation_id,
+                c.postcode AS property_id
+             FROM check_sales cs
+             INNER JOIN tbl_customers c ON c.id = cs.customer_id AND c.reservation_id IS NOT NULL
+             WHERE CAST(cs.trobex AS UNSIGNED) = 0
+               AND CAST(cs.closed AS UNSIGNED) = 1
+             ORDER BY cs.DATE ASC, cs.id ASC'
         );
 
         return $statement->fetchAll();

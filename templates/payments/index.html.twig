@@ -27,6 +27,43 @@
                     <i id="payments-refresh-icon" class="bi bi-arrow-clockwise text-lg" aria-hidden="true"></i>
                 </button>
             </div>
+
+            <div class="mt-3 flex items-center gap-2">
+                <button
+                    id="scheduler-toggle"
+                    type="button"
+                    role="switch"
+                    aria-checked="{{ scheduler.enabled ? 'true' : 'false' }}"
+                    class="relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none {{ scheduler.enabled ? 'bg-violet-600' : 'bg-slate-300' }}"
+                >
+                    <span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 {{ scheduler.enabled ? 'translate-x-4' : 'translate-x-0' }}"></span>
+                </button>
+                <span class="text-xs text-slate-500">Auto-send</span>
+
+                <div id="scheduler-select-wrap" class="{{ scheduler.enabled ? '' : 'hidden' }} flex items-center gap-1.5">
+                    <span class="text-xs text-slate-300">·</span>
+                    <select
+                        id="scheduler-schedule"
+                        class="rounded-lg border border-slate-200 bg-white py-1 pl-2 pr-6 text-xs text-slate-700 focus:border-violet-400 focus:outline-none"
+                    >
+                        <option value="every_15min" {{ scheduler.schedule == 'every_15min' ? 'selected' : '' }}>Every 15 min</option>
+                        <option value="every_30min" {{ scheduler.schedule == 'every_30min' ? 'selected' : '' }}>Every 30 min</option>
+                        <option value="every_hour" {{ scheduler.schedule == 'every_hour' ? 'selected' : '' }}>Every hour</option>
+                        <option value="every_2hours" {{ scheduler.schedule == 'every_2hours' ? 'selected' : '' }}>Every 2 hours</option>
+                        <option value="every_6hours" {{ scheduler.schedule == 'every_6hours' ? 'selected' : '' }}>Every 6 hours</option>
+                        <option value="every_12hours" {{ scheduler.schedule == 'every_12hours' ? 'selected' : '' }}>Every 12 hours</option>
+                        <option value="daily" {{ scheduler.schedule starts with 'daily_' ? 'selected' : '' }}>Daily at…</option>
+                    </select>
+                    <input
+                        id="scheduler-time"
+                        type="time"
+                        value="{{ scheduler.schedule starts with 'daily_' ? scheduler.schedule|slice(6) : '09:00' }}"
+                        class="{{ scheduler.schedule starts with 'daily_' ? '' : 'hidden' }} rounded-lg border border-slate-200 bg-white py-1 px-2 text-xs text-slate-700 focus:border-violet-400 focus:outline-none"
+                    >
+                    <span id="scheduler-spinner" class="hidden h-3 w-3 rounded-full border-2 border-violet-300 border-t-violet-600 animate-spin"></span>
+                </div>
+                <div id="scheduler-feedback" class="hidden text-xs"></div>
+            </div>
         </section>
 
         <div id="payments-alert" class="hidden rounded-2xl px-4 py-3 text-sm"></div>
@@ -386,6 +423,67 @@
             });
 
             applyFilter();
+
+            // Scheduler
+            const $schedulerToggle   = $('#scheduler-toggle');
+            const $schedulerWrap     = $('#scheduler-select-wrap');
+            const $schedulerSchedule = $('#scheduler-schedule');
+            const $schedulerTime     = $('#scheduler-time');
+            const $schedulerSpinner  = $('#scheduler-spinner');
+            const $schedulerFeedback = $('#scheduler-feedback');
+
+            function schedulerPost(payload) {
+                $schedulerToggle.prop('disabled', true);
+                $schedulerSpinner.removeClass('hidden');
+                $schedulerFeedback.addClass('hidden');
+
+                $.ajax({
+                    url: '{{ base_path }}/payments/scheduler',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    data: JSON.stringify(payload),
+                }).done(function (res) {
+                    const enabled = !!res.data.enabled;
+                    $schedulerToggle.attr('aria-checked', enabled ? 'true' : 'false')
+                        .toggleClass('bg-violet-600', enabled).toggleClass('bg-slate-300', !enabled);
+                    $schedulerToggle.find('span').toggleClass('translate-x-4', enabled).toggleClass('translate-x-0', !enabled);
+                    $schedulerWrap.toggleClass('hidden', !enabled);
+                    $schedulerFeedback.removeClass('hidden').removeClass('text-rose-500').addClass('text-violet-500').text(res.message);
+                }).fail(function (xhr) {
+                    $schedulerFeedback.removeClass('hidden').removeClass('text-violet-500').addClass('text-rose-500')
+                        .text((xhr.responseJSON || {}).message || 'Failed.');
+                }).always(function () {
+                    $schedulerToggle.prop('disabled', false);
+                    $schedulerSpinner.addClass('hidden');
+                });
+            }
+
+            $schedulerToggle.on('click', function () {
+                const isEnabled = $schedulerToggle.attr('aria-checked') === 'true';
+                if (isEnabled) {
+                    schedulerPost({ enabled: false });
+                } else {
+                    const schedule = $schedulerSchedule.val() === 'daily'
+                        ? 'daily_' + ($schedulerTime.val() || '09:00')
+                        : $schedulerSchedule.val();
+                    schedulerPost({ enabled: true, schedule });
+                }
+            });
+
+            $schedulerSchedule.on('change', function () {
+                const isDaily = $(this).val() === 'daily';
+                $schedulerTime.toggleClass('hidden', !isDaily);
+                if (!isDaily) {
+                    schedulerPost({ enabled: true, schedule: $(this).val() });
+                }
+            });
+
+            $schedulerTime.on('change', function () {
+                if ($schedulerTime.val()) {
+                    schedulerPost({ enabled: true, schedule: 'daily_' + $schedulerTime.val() });
+                }
+            });
         });
     </script>
 {% endblock %}
