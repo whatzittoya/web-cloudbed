@@ -133,6 +133,16 @@ class Reservation
             return 0;
         }
 
+        $reservationIds = array_values(array_filter(
+            array_map(fn ($r) => (string) ($r['reservationID'] ?? ''), $reservations),
+            fn ($id) => $id !== '',
+        ));
+
+        $placeholders = implode(',', array_fill(0, count($reservationIds), '?'));
+        $deleteStmt = $this->pdo->prepare(
+            "DELETE FROM tbl_reservation_cloudbed WHERE reservation_id IN ($placeholders)"
+        );
+
         $statement = $this->pdo->prepare(
             'INSERT INTO tbl_reservation_cloudbed (
                 property_id,
@@ -178,33 +188,14 @@ class Reservation
                 :allotment_block_code,
                 :group_code,
                 :origin
-            )
-            ON DUPLICATE KEY UPDATE
-                property_id = VALUES(property_id),
-                date_created = VALUES(date_created),
-                date_modified = VALUES(date_modified),
-                status = VALUES(status),
-                guest_id = VALUES(guest_id),
-                profile_id = VALUES(profile_id),
-                guest_name = VALUES(guest_name),
-                start_date = VALUES(start_date),
-                end_date = VALUES(end_date),
-                adults = VALUES(adults),
-                children = VALUES(children),
-                balance = VALUES(balance),
-                source_id = VALUES(source_id),
-                source_name = VALUES(source_name),
-                room_type_name = VALUES(room_type_name),
-                room_name = VALUES(room_name),
-                third_party_identifier = VALUES(third_party_identifier),
-                allotment_block_code = VALUES(allotment_block_code),
-                group_code = VALUES(group_code),
-                origin = VALUES(origin)'
+            )'
         );
 
         $this->pdo->beginTransaction();
 
         try {
+            $deleteStmt->execute($reservationIds);
+
             foreach ($reservations as $reservation) {
                 $firstRoom = isset($reservation['rooms'][0]) && is_array($reservation['rooms'][0])
                     ? $reservation['rooms'][0]
@@ -231,7 +222,7 @@ class Reservation
                     'third_party_identifier' => $reservation['thirdPartyIdentifier'] ?: null,
                     'allotment_block_code' => $reservation['allotmentBlockCode'] ?: null,
                     'group_code' => $reservation['groupCode'] ?: null,
-                    'origin' => $reservation['origin'] !== '' ? $reservation['origin'] : null,
+                    'origin' => ($reservation['origin'] ?? '') !== '' ? $reservation['origin'] : null,
                 ]);
             }
 
