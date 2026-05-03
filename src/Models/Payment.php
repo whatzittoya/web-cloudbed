@@ -36,6 +36,14 @@ class Payment
              FROM check_sales cs
              INNER JOIN tbl_customers c ON c.id = cs.customer_id AND c.reservation_id IS NOT NULL
              WHERE CAST(cs.trobex AS UNSIGNED) = 0
+               AND EXISTS (
+                   SELECT 1
+                   FROM tbl_sales_lines sl
+                   WHERE sl.sales_id = cs.id
+                     AND sl.type = 3
+                     AND CAST(sl.voidPayment AS UNSIGNED) = 0
+                     AND sl.description = 'charge to room'
+               )
              ORDER BY cs.DATE DESC, cs.id DESC
              LIMIT 200'
         );
@@ -59,6 +67,14 @@ class Payment
              INNER JOIN tbl_customers c ON c.id = cs.customer_id AND c.reservation_id IS NOT NULL
              WHERE CAST(cs.trobex AS UNSIGNED) = 0
                AND CAST(cs.closed AS UNSIGNED) = 1
+               AND EXISTS (
+                   SELECT 1
+                   FROM tbl_sales_lines sl
+                   WHERE sl.sales_id = cs.id
+                     AND sl.type = 3
+                     AND CAST(sl.voidPayment AS UNSIGNED) = 0
+                     AND sl.description = 'charge to room'
+               )
              ORDER BY cs.DATE ASC, cs.id ASC'
         );
 

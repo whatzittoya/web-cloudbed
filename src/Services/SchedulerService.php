@@ -6,73 +6,79 @@ namespace App\Services;
 
 class SchedulerService
 {
-    private string $logPath;
+    private string $varDir;
+    private string $taskName;
 
     public function __construct(
         private readonly string $scriptPath,
         string $rootPath,
-        private readonly string $tag = 'quinos:pull_reservations',
+        string $tag = 'quinos:pull_reservations',
     ) {
-        $logDir = $rootPath . '/var/log';
+        $this->varDir   = $rootPath . '/var/scheduler';
+        $this->taskName = str_replace(':', '_', $tag);
 
-        if (!is_dir($logDir)) {
-            mkdir($logDir, 0755, true);
+        if (!is_dir($this->varDir)) {
+            mkdir($this->varDir, 0755, true);
         }
-
-        $this->logPath = $logDir . '/pull_reservations.log';
     }
 
     public function getStatus(): array
     {
-        $line = $this->findCronLine();
-
-        if ($line === null) {
+        if (!$this->taskExists()) {
             return ['enabled' => false, 'expression' => null, 'schedule' => null];
         }
 
-        $parts = preg_split('/\s+/', ltrim($line));
-        $expression = implode(' ', array_slice($parts ?? [], 0, 5));
+        $schedule = $this->loadState();
 
         return [
-            'enabled' => true,
-            'expression' => $expression,
-            'schedule' => $this->expressionToSchedule($expression),
+            'enabled'    => true,
+            'expression' => self::scheduleToExpression($schedule ?? ''),
+            'schedule'   => $schedule,
         ];
     }
 
     public function enable(string $schedule): void
     {
-        $expression = self::scheduleToExpression($schedule);
-
-        if ($expression === null) {
+        if (self::scheduleToExpression($schedule) === null) {
             throw new \InvalidArgumentException("Invalid schedule: $schedule");
         }
 
-        $crontab = $this->removeCronLine($this->readCrontab());
-        $crontab[] = sprintf(
-            '%s php %s >> %s 2>&1 # %s',
-            $expression,
-            $this->scriptPath,
-            $this->logPath,
-            $this->tag,
+        $batPath = $this->ensureBatFile();
+        $args    = $this->scheduleToSchtasksArgs($schedule);
+        $cmd     = sprintf(
+            'schtasks /create /tn %s /tr %s /sc %s%s%s /f 2>&1',
+            escapeshellarg($this->taskName),
+            escapeshellarg($batPath),
+            $args['sc'],
+            isset($args['mo']) ? ' /mo ' . $args['mo'] : '',
+            isset($args['st']) ? ' /st ' . $args['st'] : '',
         );
-        $this->writeCrontab($crontab);
+
+        exec($cmd, $outputLines, $exitCode);
+        $output = implode("\n", $outputLines);
+
+        if ($exitCode !== 0) {
+            throw new \RuntimeException('schtasks /create failed: ' . trim($output));
+        }
+
+        $this->saveState($schedule);
     }
 
     public function disable(): void
     {
-        $crontab = $this->removeCronLine($this->readCrontab());
-        $this->writeCrontab($crontab);
+        $cmd = 'schtasks /delete /tn ' . escapeshellarg($this->taskName) . ' /f 2>&1';
+        exec($cmd);
+        $this->deleteState();
     }
 
     public static function scheduleToExpression(string $schedule): ?string
     {
         $map = [
-            'every_15min'  => '*/15 * * * *',
-            'every_30min'  => '*/30 * * * *',
-            'every_hour'   => '0 * * * *',
-            'every_2hours' => '0 */2 * * *',
-            'every_6hours' => '0 */6 * * *',
+            'every_15min'   => '*/15 * * * *',
+            'every_30min'   => '*/30 * * * *',
+            'every_hour'    => '0 * * * *',
+            'every_2hours'  => '0 */2 * * *',
+            'every_6hours'  => '0 */6 * * *',
             'every_12hours' => '0 */12 * * *',
         ];
 
@@ -80,82 +86,106 @@ class SchedulerService
             return $map[$schedule];
         }
 
-        if (preg_match('/^daily_(\d{1,2}):(\d{2})$/', $schedule, $m)) {
-            return sprintf('%d %d * * *', (int) $m[2], (int) $m[1]);
+        if (preg_match('/^daily_(\d{1,2}):(\d{2})$/', $schedule)) {
+            return $schedule;
         }
 
         return null;
     }
 
-    private function expressionToSchedule(string $expression): string
+    private function taskExists(): bool
     {
-        $map = [
-            '*/15 * * * *'  => 'every_15min',
-            '*/30 * * * *'  => 'every_30min',
-            '0 * * * *'     => 'every_hour',
-            '0 */2 * * *'   => 'every_2hours',
-            '0 */6 * * *'   => 'every_6hours',
-            '0 */12 * * *'  => 'every_12hours',
-        ];
+        exec('schtasks /query /tn ' . escapeshellarg($this->taskName) . ' /fo LIST 2>&1', $lines, $exitCode);
 
-        if (isset($map[$expression])) {
-            return $map[$expression];
-        }
-
-        if (preg_match('/^(\d+) (\d+) \* \* \*$/', $expression, $m)) {
-            return sprintf('daily_%02d:%02d', (int) $m[2], (int) $m[1]);
-        }
-
-        return $expression;
+        return $exitCode === 0;
     }
 
-    private function findCronLine(): ?string
+    private function scheduleToSchtasksArgs(string $schedule): array
     {
-        foreach ($this->readCrontab() as $line) {
-            if (str_contains($line, '# ' . $this->tag)) {
-                return trim($line);
+        $map = [
+            'every_15min'   => ['sc' => 'MINUTE', 'mo' => '15'],
+            'every_30min'   => ['sc' => 'MINUTE', 'mo' => '30'],
+            'every_hour'    => ['sc' => 'HOURLY', 'mo' => '1'],
+            'every_2hours'  => ['sc' => 'HOURLY', 'mo' => '2'],
+            'every_6hours'  => ['sc' => 'HOURLY', 'mo' => '6'],
+            'every_12hours' => ['sc' => 'HOURLY', 'mo' => '12'],
+        ];
+
+        if (isset($map[$schedule])) {
+            return $map[$schedule];
+        }
+
+        // daily_HH:MM
+        if (preg_match('/^daily_(\d{1,2}):(\d{2})$/', $schedule, $m)) {
+            return ['sc' => 'DAILY', 'st' => sprintf('%02d:%02d', (int) $m[1], (int) $m[2])];
+        }
+
+        throw new \InvalidArgumentException("Cannot convert schedule to schtasks args: $schedule");
+    }
+
+    private function ensureBatFile(): string
+    {
+        $logPath = $this->varDir . '/' . $this->taskName . '.log';
+        $batPath = $this->varDir . '/' . $this->taskName . '.bat';
+        $php     = $this->resolvePhpBinary();
+
+        $content = sprintf(
+            "@echo off\r\n\"%s\" \"%s\" >> \"%s\" 2>&1\r\n",
+            $php,
+            str_replace('/', '\\', $this->scriptPath),
+            str_replace('/', '\\', $logPath),
+        );
+
+        file_put_contents($batPath, $content);
+
+        return str_replace('/', '\\', $batPath);
+    }
+
+    private function resolvePhpBinary(): string
+    {
+        $binary = PHP_BINARY;
+
+        // In a web/CGI context PHP_BINARY may point to php-cgi.exe — swap it for php.exe
+        if (stripos($binary, 'php-cgi') !== false || stripos($binary, 'php-cgi.exe') !== false) {
+            $candidate = rtrim(dirname($binary), '/\\') . DIRECTORY_SEPARATOR . 'php.exe';
+
+            if (file_exists($candidate)) {
+                return $candidate;
             }
         }
 
-        return null;
+        return $binary;
     }
 
-    private function readCrontab(): array
+    private function stateFile(): string
     {
-        $output = shell_exec('crontab -l 2>/dev/null');
-
-        if ($output === null || trim($output) === '') {
-            return [];
-        }
-
-        return explode("\n", rtrim($output));
+        return $this->varDir . '/' . $this->taskName . '.state.json';
     }
 
-    private function writeCrontab(array $lines): void
+    private function saveState(string $schedule): void
     {
-        $lines = array_values(array_filter($lines, fn ($l) => trim($l) !== ''));
-        $content = $lines === [] ? '' : implode("\n", $lines) . "\n";
-        $tmpFile = tempnam(sys_get_temp_dir(), 'crontab_');
-
-        if ($tmpFile === false) {
-            throw new \RuntimeException('Failed to create temp file for crontab.');
-        }
-
-        file_put_contents($tmpFile, $content);
-
-        if ($content === '') {
-            shell_exec('crontab -r 2>/dev/null');
-        } else {
-            shell_exec('crontab ' . escapeshellarg($tmpFile));
-        }
-
-        unlink($tmpFile);
+        file_put_contents($this->stateFile(), json_encode(['schedule' => $schedule], JSON_THROW_ON_ERROR));
     }
 
-    private function removeCronLine(array $crontab): array
+    private function loadState(): ?string
     {
-        return array_values(
-            array_filter($crontab, fn ($l) => !str_contains($l, '# ' . $this->tag))
-        );
+        $file = $this->stateFile();
+
+        if (!file_exists($file)) {
+            return null;
+        }
+
+        $data = json_decode((string) file_get_contents($file), true);
+
+        return is_array($data) ? ($data['schedule'] ?? null) : null;
+    }
+
+    private function deleteState(): void
+    {
+        $file = $this->stateFile();
+
+        if (file_exists($file)) {
+            unlink($file);
+        }
     }
 }
