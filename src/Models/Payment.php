@@ -42,7 +42,7 @@ class Payment
                    WHERE sl.sales_id = cs.id
                      AND sl.type = 3
                      AND CAST(sl.voidPayment AS UNSIGNED) = 0
-                     AND sl.description = 'charge to room'
+                     AND sl.description = \'charge to room\'
                )
              ORDER BY cs.DATE DESC, cs.id DESC
              LIMIT 200'
@@ -73,7 +73,7 @@ class Payment
                    WHERE sl.sales_id = cs.id
                      AND sl.type = 3
                      AND CAST(sl.voidPayment AS UNSIGNED) = 0
-                     AND sl.description = 'charge to room'
+                     AND sl.description = \'charge to room\'
                )
              ORDER BY cs.DATE ASC, cs.id ASC'
         );
