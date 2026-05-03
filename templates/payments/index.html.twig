@@ -46,6 +46,7 @@
                         id="scheduler-schedule"
                         class="rounded-lg border border-slate-200 bg-white py-1 pl-2 pr-6 text-xs text-slate-700 focus:border-violet-400 focus:outline-none"
                     >
+                        <option value="every_5min" {{ scheduler.schedule == 'every_5min' ? 'selected' : '' }}>Every 5 min</option>
                         <option value="every_15min" {{ scheduler.schedule == 'every_15min' ? 'selected' : '' }}>Every 15 min</option>
                         <option value="every_30min" {{ scheduler.schedule == 'every_30min' ? 'selected' : '' }}>Every 30 min</option>
                         <option value="every_hour" {{ scheduler.schedule == 'every_hour' ? 'selected' : '' }}>Every hour</option>

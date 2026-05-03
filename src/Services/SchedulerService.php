@@ -74,6 +74,7 @@ class SchedulerService
     public static function scheduleToExpression(string $schedule): ?string
     {
         $map = [
+            'every_5min'    => '*/5 * * * *',
             'every_15min'   => '*/15 * * * *',
             'every_30min'   => '*/30 * * * *',
             'every_hour'    => '0 * * * *',
@@ -103,6 +104,7 @@ class SchedulerService
     private function scheduleToSchtasksArgs(string $schedule): array
     {
         $map = [
+            'every_5min'    => ['sc' => 'MINUTE', 'mo' => '5'],
             'every_15min'   => ['sc' => 'MINUTE', 'mo' => '15'],
             'every_30min'   => ['sc' => 'MINUTE', 'mo' => '30'],
             'every_hour'    => ['sc' => 'HOURLY', 'mo' => '1'],
