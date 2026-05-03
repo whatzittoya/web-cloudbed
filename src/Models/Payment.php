@@ -35,7 +35,7 @@ class Payment
                 c.postcode AS property_id
              FROM check_sales cs
              INNER JOIN tbl_customers c ON c.id = cs.customer_id AND c.reservation_id IS NOT NULL
-             WHERE CAST(cs.trobex AS UNSIGNED) = 0
+             WHERE (cs.trobex IS NULL OR CAST(cs.trobex AS UNSIGNED) = 0)
                AND EXISTS (
                    SELECT 1
                    FROM tbl_sales_lines sl
@@ -65,7 +65,7 @@ class Payment
                 c.postcode AS property_id
              FROM check_sales cs
              INNER JOIN tbl_customers c ON c.id = cs.customer_id AND c.reservation_id IS NOT NULL
-             WHERE CAST(cs.trobex AS UNSIGNED) = 0
+             WHERE (cs.trobex IS NULL OR CAST(cs.trobex AS UNSIGNED) = 0)
                AND CAST(cs.closed AS UNSIGNED) = 1
                AND EXISTS (
                    SELECT 1
