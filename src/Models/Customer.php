@@ -41,7 +41,7 @@ class Customer
         if ($existingId !== null) {
             $statement = $this->pdo->prepare(
                 'UPDATE tbl_customers
-                 SET active = :active,
+                 SET active = IF(:active = 1, b\'1\', b\'0\'),
                      code = :code,
                      name = :name,
                      notes = :notes,
@@ -72,7 +72,7 @@ class Customer
                 created,
                 expired
             ) VALUES (
-                :active,
+                IF(:active = 1, b\'1\', b\'0\'),
                 :code,
                 :name,
                 :notes,
