@@ -212,22 +212,34 @@ class ReservationController
         }
 
         try {
-            $apiResponse = $this->client->request('GET', $cloudbeds['base_url'] . '/getReservations', [
-                'headers' => [
-                    'accept' => 'application/json',
-                    'x-api-key' => $accessToken['api_key'],
-                ],
-                'query' => [
-                    'status' => $cloudbeds['reservation_status'],
-                    'includeAllRooms' => 'true',
-                ],
-                'timeout' => 30,
-            ]);
+            $items = [];
+            $statuses = $cloudbeds['reservation_statuses'] ?? [$cloudbeds['reservation_status']];
 
-            $payload = json_decode((string) $apiResponse->getBody(), true, 512, JSON_THROW_ON_ERROR);
-            $items = is_array($payload['data'] ?? null) ? $payload['data'] : [];
+            foreach ($statuses as $status) {
+                $apiResponse = $this->client->request('GET', $cloudbeds['base_url'] . '/getReservations', [
+                    'headers' => [
+                        'accept' => 'application/json',
+                        'x-api-key' => $accessToken['api_key'],
+                    ],
+                    'query' => [
+                        'status' => $status,
+                        'includeAllRooms' => 'true',
+                    ],
+                    'timeout' => 30,
+                ]);
 
-            $synced = $this->reservations->upsertMany($items);
+                $payload = json_decode((string) $apiResponse->getBody(), true, 512, JSON_THROW_ON_ERROR);
+                $reservations = is_array($payload['data'] ?? null) ? $payload['data'] : [];
+
+                foreach ($reservations as $reservation) {
+                    $reservationId = (string) ($reservation['reservationID'] ?? '');
+                    $items[$reservationId !== '' ? $reservationId : uniqid('reservation_', true)] = $reservation;
+                }
+            }
+
+            $items = array_values($items);
+
+            $synced = $this->reservations->upsertMany($items, $cloudbeds['checked_out_reservation_status']);
             $message = sprintf('Synced %d reservation(s) from Cloudbeds.', $synced);
 
             if ($this->expectsJson($request)) {

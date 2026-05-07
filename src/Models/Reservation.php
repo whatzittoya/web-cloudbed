@@ -45,11 +45,14 @@ class Reservation
                         ) THEN 1
                         ELSE 0
                     END AS customer_added
-                FROM tbl_reservation_cloudbed r';
-        $parameters = [];
+                FROM tbl_reservation_cloudbed r
+                WHERE r.status = :status';
+        $parameters = [
+            'status' => 'checked_in',
+        ];
 
         if ($search !== '') {
-            $sql .= ' WHERE r.guest_name LIKE :search';
+            $sql .= ' AND r.guest_name LIKE :search';
             $parameters['search'] = '%' . $search . '%';
         }
 
@@ -121,13 +124,14 @@ class Reservation
                     ELSE 0
                 END AS customer_added
              FROM tbl_reservation_cloudbed r
+             WHERE r.status = \'checked_in\'
              ORDER BY start_date DESC, date_modified DESC'
         );
 
         return $statement->fetchAll();
     }
 
-    public function upsertMany(array $reservations): int
+    public function upsertMany(array $reservations, string $checkedOutStatus = 'checked_out'): int
     {
         if ($reservations === []) {
             return 0;
@@ -137,6 +141,10 @@ class Reservation
             array_map(fn ($r) => (string) ($r['reservationID'] ?? ''), $reservations),
             fn ($id) => $id !== '',
         ));
+
+        if ($reservationIds === []) {
+            return 0;
+        }
 
         $placeholders = implode(',', array_fill(0, count($reservationIds), '?'));
         $deleteStmt = $this->pdo->prepare(
@@ -231,6 +239,8 @@ class Reservation
                 "DELETE FROM tbl_reservation_cloudbed WHERE reservation_id NOT IN ($stalePlaceholders)"
             )->execute($reservationIds);
 
+            $this->syncCustomerActiveStatuses($checkedOutStatus);
+
             $this->pdo->commit();
         } catch (\Throwable $exception) {
             $this->pdo->rollBack();
@@ -239,5 +249,23 @@ class Reservation
         }
 
         return count($reservations);
+    }
+
+    private function syncCustomerActiveStatuses(string $checkedOutStatus): void
+    {
+        $statement = $this->pdo->prepare(
+            'UPDATE tbl_customers c
+             INNER JOIN tbl_reservation_cloudbed r ON r.reservation_id = c.reservation_id
+             SET c.active = CASE
+                 WHEN r.status = :checked_out_status THEN b\'0\'
+                 ELSE b\'1\'
+             END
+             WHERE c.reservation_id IS NOT NULL
+               AND c.reservation_id <> \'\''
+        );
+
+        $statement->execute([
+            'checked_out_status' => $checkedOutStatus,
+        ]);
     }
 }

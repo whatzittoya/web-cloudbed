@@ -20,7 +20,8 @@ class Customer
             ?? $this->findExistingIdByReservationId($reservationId);
 
         $payload = [
-            'code' => 'cloudbed_guest',
+            'active' => ($reservation['status'] ?? '') === 'checked_out' ? 0 : 1,
+            'code' => (string) ($reservation['guest_name'] ?? ''),
             'name' => (string) ($reservation['guest_name'] ?? ''),
             'notes' => (string) ($reservation['guest_id'] ?? ''),
             'address' => $reservation['room_type_name'] !== null && $reservation['room_type_name'] !== ''
@@ -40,7 +41,7 @@ class Customer
         if ($existingId !== null) {
             $statement = $this->pdo->prepare(
                 'UPDATE tbl_customers
-                 SET active = b\'1\',
+                 SET active = :active,
                      code = :code,
                      name = :name,
                      notes = :notes,
@@ -71,7 +72,7 @@ class Customer
                 created,
                 expired
             ) VALUES (
-                b\'1\',
+                :active,
                 :code,
                 :name,
                 :notes,

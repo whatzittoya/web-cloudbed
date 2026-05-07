@@ -133,18 +133,6 @@ class Payment
                 'id' => $paymentId,
             ]);
 
-            if ($customerTableId !== null) {
-                $customerStatement = $this->pdo->prepare(
-                    'UPDATE tbl_customers
-                     SET active = b\'0\'
-                     WHERE id = :id'
-                );
-
-                $customerStatement->execute([
-                    'id' => $customerTableId,
-                ]);
-            }
-
             $this->pdo->commit();
         } catch (\Throwable $exception) {
             $this->pdo->rollBack();

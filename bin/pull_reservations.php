@@ -34,21 +34,33 @@ if ($accessToken === null) {
 
 try {
     $cloudbeds = $settings['cloudbeds'];
-    $response = $client->request('GET', rtrim($cloudbeds['base_url'], '/') . '/getReservations', [
-        'headers' => [
-            'accept' => 'application/json',
-            'x-api-key' => $accessToken['api_key'],
-        ],
-        'query' => [
-            'status' => $cloudbeds['reservation_status'],
-            'includeAllRooms' => 'true',
-        ],
-        'timeout' => 30,
-    ]);
+    $items = [];
+    $statuses = $cloudbeds['reservation_statuses'] ?? [$cloudbeds['reservation_status']];
 
-    $payload = json_decode((string) $response->getBody(), true, 512, JSON_THROW_ON_ERROR);
-    $items = is_array($payload['data'] ?? null) ? $payload['data'] : [];
-    $synced = $reservations->upsertMany($items);
+    foreach ($statuses as $status) {
+        $response = $client->request('GET', rtrim($cloudbeds['base_url'], '/') . '/getReservations', [
+            'headers' => [
+                'accept' => 'application/json',
+                'x-api-key' => $accessToken['api_key'],
+            ],
+            'query' => [
+                'status' => $status,
+                'includeAllRooms' => 'true',
+            ],
+            'timeout' => 30,
+        ]);
+
+        $payload = json_decode((string) $response->getBody(), true, 512, JSON_THROW_ON_ERROR);
+        $reservations = is_array($payload['data'] ?? null) ? $payload['data'] : [];
+
+        foreach ($reservations as $reservation) {
+            $reservationId = (string) ($reservation['reservationID'] ?? '');
+            $items[$reservationId !== '' ? $reservationId : uniqid('reservation_', true)] = $reservation;
+        }
+    }
+
+    $items = array_values($items);
+    $synced = $reservations->upsertMany($items, $cloudbeds['checked_out_reservation_status']);
     $latestPulledAt = $reservations->latestPulledAt() ?? date('Y-m-d H:i:s');
 
     fwrite(STDOUT, sprintf(

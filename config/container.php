@@ -18,6 +18,18 @@ use Slim\Flash\Messages;
 use Slim\Views\Twig;
 
 $rootPath = dirname(__DIR__);
+$configuredReservationStatuses = $_ENV['CLOUDBEDS_RESERVATION_STATUSES'] ?? '';
+
+if ($configuredReservationStatuses !== '') {
+    $reservationStatuses = array_map('trim', explode(',', $configuredReservationStatuses));
+} else {
+    $reservationStatuses = [
+        $_ENV['CLOUDBEDS_RESERVATION_STATUS'] ?? 'checked_in',
+        $_ENV['CLOUDBEDS_CHECKED_OUT_RESERVATION_STATUS'] ?? 'checked_out',
+    ];
+}
+
+$reservationStatuses = array_values(array_unique(array_filter($reservationStatuses, fn ($status) => $status !== '')));
 
 $builder = new ContainerBuilder();
 
@@ -40,7 +52,9 @@ $builder->addDefinitions([
         ],
         'cloudbeds' => [
             'base_url' => rtrim($_ENV['CLOUDBEDS_BASE_URL'] ?? 'https://api.cloudbeds.com/api/v1.3', '/'),
-            'reservation_status' => $_ENV['CLOUDBEDS_RESERVATION_STATUS'] ?? 'checked_in',
+            'reservation_status' => $reservationStatuses[0] ?? 'checked_in',
+            'reservation_statuses' => $reservationStatuses,
+            'checked_out_reservation_status' => $_ENV['CLOUDBEDS_CHECKED_OUT_RESERVATION_STATUS'] ?? 'checked_out',
         ],
         'paths' => [
             'root' => $rootPath,
